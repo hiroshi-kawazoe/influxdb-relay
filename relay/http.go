@@ -114,23 +114,33 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
 	if r.URL.Path == "/ping" && (r.Method == "GET" || r.Method == "HEAD") {
-			w.Header().Add("X-InfluxDB-Version", "relay")
-			w.WriteHeader(http.StatusNoContent)
-			return
-	}
-
-	if r.URL.Path != "/write" {
-		jsonError(w, http.StatusNotFound, "invalid write endpoint")
+		w.Header().Add("X-InfluxDB-Version", "relay")
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	if r.Method != "POST" {
-		w.Header().Set("Allow", "POST")
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusNoContent)
-		} else {
-			jsonError(w, http.StatusMethodNotAllowed, "invalid write method")
+	if r.URL.Path == "/write" {
+		if r.Method != "POST" {
+			w.Header().Set("Allow", "POST")
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusNoContent)
+			} else {
+				jsonError(w, http.StatusMethodNotAllowed, "invalid write method")
+			}
+			return
 		}
+	} else if r.URL.Path == "/query" {
+		if r.Method != "GET" {
+			w.Header().Set("Allow", "GET")
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusOK)
+			} else {
+				jsonError(w, http.StatusMethodNotAllowed, "invalid query method")
+			}
+			return
+		}
+	} else {
+		jsonError(w, http.StatusNotFound, "invalid write/query endpoint")
 		return
 	}
 
@@ -209,7 +219,7 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		b := b
 		go func() {
 			defer wg.Done()
-			resp, err := b.post(outBytes, query, authHeader)
+			resp, err := b.post(outBytes, r.URL.Path, query, authHeader)
 			if err != nil {
 				log.Printf("Problem posting to relay %q backend %q: %v", h.Name(), b.name, err)
 			} else {
@@ -286,7 +296,7 @@ func jsonError(w http.ResponseWriter, code int, message string) {
 }
 
 type poster interface {
-	post([]byte, string, string) (*responseData, error)
+	post([]byte, string, string, string) (*responseData, error)
 }
 
 type simplePoster struct {
@@ -312,8 +322,8 @@ func newSimplePoster(location string, timeout time.Duration, skipTLSVerification
 	}
 }
 
-func (b *simplePoster) post(buf []byte, query string, auth string) (*responseData, error) {
-	req, err := http.NewRequest("POST", b.location, bytes.NewReader(buf))
+func (b *simplePoster) post(buf []byte, path, query string, auth string) (*responseData, error) {
+	req, err := http.NewRequest("POST", b.location+path, bytes.NewReader(buf))
 	if err != nil {
 		return nil, err
 	}

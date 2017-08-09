@@ -47,9 +47,9 @@ func newRetryBuffer(size, batch int, max time.Duration, p poster) *retryBuffer {
 	return r
 }
 
-func (r *retryBuffer) post(buf []byte, query string, auth string) (*responseData, error) {
+func (r *retryBuffer) post(buf []byte, path string, query string, auth string) (*responseData, error) {
 	if atomic.LoadInt32(&r.buffering) == 0 {
-		resp, err := r.p.post(buf, query, auth)
+		resp, err := r.p.post(buf, path, query, auth)
 		// TODO A 5xx caused by the point data could cause the relay to buffer forever
 		if err == nil && resp.StatusCode/100 != 5 {
 			return resp, err
@@ -58,7 +58,7 @@ func (r *retryBuffer) post(buf []byte, query string, auth string) (*responseData
 	}
 
 	// already buffering or failed request
-	batch, err := r.list.add(buf, query, auth)
+	batch, err := r.list.add(buf, path, query, auth)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (r *retryBuffer) run() {
 
 		interval := r.initialInterval
 		for {
-			resp, err := r.p.post(buf.Bytes(), batch.query, batch.auth)
+			resp, err := r.p.post(buf.Bytes(), batch.path, batch.query, batch.auth)
 			if err == nil && resp.StatusCode/100 != 5 {
 				batch.resp = resp
 				atomic.StoreInt32(&r.buffering, 0)
@@ -101,6 +101,7 @@ func (r *retryBuffer) run() {
 
 type batch struct {
 	query string
+	path  string
 	auth  string
 	bufs  [][]byte
 	size  int
@@ -112,11 +113,12 @@ type batch struct {
 	next *batch
 }
 
-func newBatch(buf []byte, query string, auth string) *batch {
+func newBatch(buf []byte, path string, query string, auth string) *batch {
 	b := new(batch)
 	b.bufs = [][]byte{buf}
 	b.size = len(buf)
 	b.query = query
+	b.path = path
 	b.auth = auth
 	b.wg.Add(1)
 	return b
@@ -155,7 +157,7 @@ func (l *bufferList) pop() *batch {
 	return b
 }
 
-func (l *bufferList) add(buf []byte, query string, auth string) (*batch, error) {
+func (l *bufferList) add(buf []byte, path, query string, auth string) (*batch, error) {
 	l.cond.L.Lock()
 
 	if l.size+len(buf) > l.maxSize {
@@ -187,7 +189,7 @@ func (l *bufferList) add(buf []byte, query string, auth string) (*batch, error) 
 
 	if *cur == nil {
 		// new tail element
-		*cur = newBatch(buf, query, auth)
+		*cur = newBatch(buf, path, query, auth)
 	} else {
 		// append to current batch
 		b := *cur
