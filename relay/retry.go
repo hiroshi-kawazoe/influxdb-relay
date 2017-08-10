@@ -67,6 +67,10 @@ func (r *retryBuffer) post(buf []byte, path string, query string, auth string) (
 	return batch.resp, nil
 }
 
+func (r *retryBuffer) getStats() map[string]interface{} {
+	return r.list.getStats()
+}
+
 func (r *retryBuffer) run() {
 	buf := bytes.NewBuffer(make([]byte, 0, r.maxBatch))
 	for {
@@ -199,4 +203,11 @@ func (l *bufferList) add(buf []byte, path, query string, auth string) (*batch, e
 
 	l.cond.L.Unlock()
 	return *cur, nil
+}
+
+func (l *bufferList) getStats() map[string]interface{} {
+	return map[string]interface{}{
+		"bufferedBytes": l.size,
+		"maxBytes":      l.maxSize,
+	}
 }

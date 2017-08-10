@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -119,7 +120,8 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.URL.Path == "/write" {
+	switch r.URL.Path {
+	case "/write":
 		if r.Method != "POST" {
 			w.Header().Set("Allow", "POST")
 			if r.Method == "OPTIONS" {
@@ -129,7 +131,7 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-	} else if r.URL.Path == "/query" {
+	case "/query":
 		if r.Method != "GET" {
 			w.Header().Set("Allow", "GET")
 			if r.Method == "OPTIONS" {
@@ -139,8 +141,28 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-	} else {
-		jsonError(w, http.StatusNotFound, "invalid write/query endpoint")
+	case "/status":
+		if r.Method == "GET" || r.Method == "HEAD" {
+			st := make([]map[string]interface{}, 0, len(h.backends))
+			for _, b := range h.backends {
+				s := b.poster.getStats()
+				s["name"] = b.name
+				s["location"] = b.location
+				st = append(st, s)
+			}
+			j, err := json.Marshal(st)
+			if err != nil {
+				log.Printf("error: %s", err)
+				jsonError(w, http.StatusInternalServerError, "json marshalling failed")
+				return
+			}
+			jsonError(w, http.StatusOK, fmt.Sprintf("\"status\": %s", string(j)))
+		} else {
+			jsonError(w, http.StatusMethodNotAllowed, "invalid status method")
+		}
+		return
+	default:
+		jsonError(w, http.StatusNotFound, "invalid endpoint")
 		return
 	}
 
@@ -289,7 +311,12 @@ func (rd *responseData) Write(w http.ResponseWriter) {
 
 func jsonError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
-	data := fmt.Sprintf("{\"error\":%q}\n", message)
+	var data string
+	if code/100 != 2 {
+		data = fmt.Sprintf("{\"error\":%q}\n", message)
+	} else {
+		data = fmt.Sprintf("{%s}\n", message)
+	}
 	w.Header().Set("Content-Length", fmt.Sprint(len(data)))
 	w.WriteHeader(code)
 	w.Write([]byte(data))
@@ -297,6 +324,7 @@ func jsonError(w http.ResponseWriter, code int, message string) {
 
 type poster interface {
 	post([]byte, string, string, string) (*responseData, error)
+	getStats() map[string]interface{}
 }
 
 type simplePoster struct {
@@ -319,6 +347,12 @@ func newSimplePoster(location string, timeout time.Duration, skipTLSVerification
 			Transport: transport,
 		},
 		location: location,
+	}
+}
+
+func (b *simplePoster) getStats() map[string]interface{} {
+	return map[string]interface{}{
+		"location": b.location,
 	}
 }
 
@@ -359,7 +393,8 @@ func (b *simplePoster) post(buf []byte, path, query string, auth string) (*respo
 
 type httpBackend struct {
 	poster
-	name string
+	name     string
+	location string
 }
 
 func newHTTPBackend(cfg *HTTPOutputConfig) (*httpBackend, error) {
@@ -399,8 +434,9 @@ func newHTTPBackend(cfg *HTTPOutputConfig) (*httpBackend, error) {
 	}
 
 	return &httpBackend{
-		poster: p,
-		name:   cfg.Name,
+		poster:   p,
+		name:     cfg.Name,
+		location: cfg.Location,
 	}, nil
 }
 
