@@ -132,6 +132,7 @@ type bufferList struct {
 	cond     *sync.Cond
 	head     *batch
 	size     int
+	count    int
 	maxSize  int
 	maxBatch int
 }
@@ -148,13 +149,14 @@ func newBufferList(maxSize, maxBatch int) *bufferList {
 func (l *bufferList) pop() *batch {
 	l.cond.L.Lock()
 
-	for l.size == 0 {
+	for l.count == 0 {
 		l.cond.Wait()
 	}
 
 	b := l.head
 	l.head = l.head.next
 	l.size -= b.size
+	l.count--
 
 	l.cond.L.Unlock()
 
@@ -170,6 +172,7 @@ func (l *bufferList) add(buf []byte, path, query string, auth string) (*batch, e
 	}
 
 	l.size += len(buf)
+	l.count++
 	l.cond.Signal()
 
 	var cur **batch
@@ -208,6 +211,7 @@ func (l *bufferList) add(buf []byte, path, query string, auth string) (*batch, e
 func (l *bufferList) getStats() map[string]interface{} {
 	return map[string]interface{}{
 		"bufferedBytes": l.size,
+		"bufferedCount": l.count,
 		"maxBytes":      l.maxSize,
 	}
 }

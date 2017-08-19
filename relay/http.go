@@ -132,8 +132,9 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case "/query":
-		if r.Method != "GET" {
+		if r.Method != "GET" && r.Method != "POST" {
 			w.Header().Set("Allow", "GET")
+			w.Header().Set("Allow", "POST")
 			if r.Method == "OPTIONS" {
 				w.WriteHeader(http.StatusOK)
 			} else {
@@ -197,21 +198,24 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	precision := queryParams.Get("precision")
-	points, err := models.ParsePointsWithPrecision(bodyBuf.Bytes(), start, precision)
-	if err != nil {
-		putBuf(bodyBuf)
-		jsonError(w, http.StatusBadRequest, "unable to parse points")
-		return
-	}
-
 	outBuf := getBuf()
-	for _, p := range points {
-		if _, err = outBuf.WriteString(p.PrecisionString(precision)); err != nil {
-			break
+
+	if r.URL.Path == "/write" {
+		precision := queryParams.Get("precision")
+		points, err := models.ParsePointsWithPrecision(bodyBuf.Bytes(), start, precision)
+		if err != nil {
+			putBuf(bodyBuf)
+			jsonError(w, http.StatusBadRequest, "unable to parse points")
+			return
 		}
-		if err = outBuf.WriteByte('\n'); err != nil {
-			break
+
+		for _, p := range points {
+			if _, err = outBuf.WriteString(p.PrecisionString(precision)); err != nil {
+				break
+			}
+			if err = outBuf.WriteByte('\n'); err != nil {
+				break
+			}
 		}
 	}
 
