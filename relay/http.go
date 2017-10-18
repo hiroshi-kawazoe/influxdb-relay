@@ -162,6 +162,22 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, http.StatusMethodNotAllowed, "invalid status method")
 		}
 		return
+	case "/metrics":
+		if r.Method == "GET" || r.Method == "HEAD" {
+			r := h.createOneMetricBlock("buffered_bytes",
+				"The current number of bytes in the buffer.")
+			r += h.createOneMetricBlock("buffered_count",
+				"The current number of requests in the buffer.")
+			r += h.createOneMetricBlock("max_bytes",
+				"The maximum number of bytes in the buffer.")
+
+			w.Header().Set("Content-Length", fmt.Sprint(len(r)))
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(r))
+		} else {
+			jsonError(w, http.StatusMethodNotAllowed, "invalid status method")
+		}
+		return
 	default:
 		jsonError(w, http.StatusNotFound, "invalid endpoint")
 		return
@@ -290,6 +306,18 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	errResponse.Write(w)
+}
+
+func (h *HTTP) createOneMetricBlock(name, docstring string) string {
+	r := fmt.Sprintf("# HELP %v %v\n", name, docstring)
+	r += fmt.Sprintf("# TYPE %v counter\n", name)
+	for _, b := range h.backends {
+		s := b.poster.getStats()
+		r += fmt.Sprintf("%v{name=\"%v\",location=\"%v\"} %v\n",
+			name, b.name, b.location, s[name])
+	}
+	r += "\n"
+	return r
 }
 
 type responseData struct {

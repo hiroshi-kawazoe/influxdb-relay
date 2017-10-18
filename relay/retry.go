@@ -210,8 +210,8 @@ func (l *bufferList) add(buf []byte, path, query string, auth string) (*batch, e
 
 func (l *bufferList) getStats() map[string]interface{} {
 	return map[string]interface{}{
-		"bufferedBytes": l.size,
-		"bufferedCount": l.count,
-		"maxBytes":      l.maxSize,
+		"buffered_bytes": l.size,
+		"buffered_count": l.count,
+		"max_bytes":      l.maxSize,
 	}
 }
