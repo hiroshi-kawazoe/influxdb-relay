@@ -171,6 +171,7 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			r += h.createOneMetricBlock("max_bytes",
 				"The maximum number of bytes in the buffer.")
 
+			w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 			w.Header().Set("Content-Length", fmt.Sprint(len(r)))
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(r))
