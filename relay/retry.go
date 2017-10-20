@@ -212,6 +212,6 @@ func (l *bufferList) getStats() map[string]interface{} {
 	return map[string]interface{}{
 		"buffered_bytes": l.size,
 		"buffered_count": l.count,
-		"max_bytes":      l.maxSize,
+		"buffer_size":    l.maxSize,
 	}
 }

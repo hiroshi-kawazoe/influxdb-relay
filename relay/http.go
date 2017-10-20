@@ -168,8 +168,8 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"The current number of bytes in the buffer.")
 			r += h.createOneMetricBlock("buffered_count",
 				"The current number of requests in the buffer.")
-			r += h.createOneMetricBlock("max_bytes",
-				"The maximum number of bytes in the buffer.")
+			r += h.createOneMetricBlock("buffer_size",
+				"The size of the buffer in bytes.")
 
 			w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 			w.Header().Set("Content-Length", fmt.Sprint(len(r)))
@@ -311,7 +311,7 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *HTTP) createOneMetricBlock(name, docstring string) string {
 	r := fmt.Sprintf("# HELP %v %v\n", name, docstring)
-	r += fmt.Sprintf("# TYPE %v counter\n", name)
+	r += fmt.Sprintf("# TYPE %v gauge\n", name)
 	for _, b := range h.backends {
 		s := b.poster.getStats()
 		r += fmt.Sprintf("%v{name=\"%v\",location=\"%v\"} %v\n",
