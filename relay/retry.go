@@ -2,6 +2,7 @@ package relay
 
 import (
 	"bytes"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -54,6 +55,7 @@ func (r *retryBuffer) post(buf []byte, path string, query string, auth string) (
 		if err == nil && resp.StatusCode/100 != 5 {
 			return resp, err
 		}
+		log.Printf("Detect influxdb down")
 		atomic.StoreInt32(&r.buffering, 1)
 	}
 
@@ -76,6 +78,9 @@ func (r *retryBuffer) run() {
 	for {
 		buf.Reset()
 		batch := r.list.pop()
+		if batch == nil {
+			continue
+		}
 
 		for _, b := range batch.bufs {
 			buf.Write(b)
@@ -85,6 +90,7 @@ func (r *retryBuffer) run() {
 		for {
 			resp, err := r.p.post(buf.Bytes(), batch.path, batch.query, batch.auth)
 			if err == nil && resp.StatusCode/100 != 5 {
+				log.Printf("Detect influxdb recovery")
 				batch.resp = resp
 				atomic.StoreInt32(&r.buffering, 0)
 				batch.wg.Done()
@@ -151,6 +157,10 @@ func (l *bufferList) pop() *batch {
 
 	for l.count == 0 {
 		l.cond.Wait()
+	}
+
+	if l.head == nil {
+		return nil
 	}
 
 	b := l.head
