@@ -234,6 +234,12 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
+	} else if r.URL.Path == "/query" {
+		if _, err := outBuf.Write(bodyBuf.Bytes()); err != nil {
+			putBuf(bodyBuf)
+			jsonError(w, http.StatusBadRequest, "write buffer")
+			return
+		}
 	}
 
 	// done with the input points
@@ -396,7 +402,7 @@ func (b *simplePoster) post(buf []byte, path, query string, auth string) (*respo
 	}
 
 	req.URL.RawQuery = query
-	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Content-Length", strconv.Itoa(len(buf)))
 	if auth != "" {
 		req.Header.Set("Authorization", auth)
