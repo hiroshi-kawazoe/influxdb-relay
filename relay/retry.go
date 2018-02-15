@@ -154,6 +154,7 @@ func newBufferList(maxSize, maxBatch int) *bufferList {
 // pop will remove and return the first element of the list, blocking if necessary
 func (l *bufferList) pop() *batch {
 	l.cond.L.Lock()
+	defer l.cond.L.Unlock()
 
 	for l.count == 0 {
 		l.cond.Wait()
@@ -168,16 +169,14 @@ func (l *bufferList) pop() *batch {
 	l.size -= b.size
 	l.count--
 
-	l.cond.L.Unlock()
-
 	return b
 }
 
 func (l *bufferList) add(buf []byte, path, query string, auth string) (*batch, error) {
 	l.cond.L.Lock()
+	defer l.cond.L.Unlock()
 
 	if l.size+len(buf) > l.maxSize {
-		l.cond.L.Unlock()
 		return nil, ErrBufferFull
 	}
 
@@ -214,7 +213,6 @@ func (l *bufferList) add(buf []byte, path, query string, auth string) (*batch, e
 		b.bufs = append(b.bufs, buf)
 	}
 
-	l.cond.L.Unlock()
 	return *cur, nil
 }
 
