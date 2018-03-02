@@ -219,8 +219,8 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Path == "/write" {
 		precision := queryParams.Get("precision")
-		points, err := models.ParsePointsWithPrecision(bodyBuf.Bytes(), start, precision)
-		if err != nil {
+		points, err2 := models.ParsePointsWithPrecision(bodyBuf.Bytes(), start, precision)
+		if err2 != nil {
 			putBuf(bodyBuf)
 			jsonError(w, http.StatusBadRequest, "unable to parse points")
 			return

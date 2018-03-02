@@ -2,7 +2,6 @@ package relay
 
 import (
 	"bytes"
-	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -55,7 +54,7 @@ func (r *retryBuffer) post(buf []byte, path string, query string, auth string) (
 		if err == nil && resp.StatusCode/100 != 5 {
 			return resp, err
 		}
-		log.Printf("Detect influxdb down")
+		// log.Printf("Detect influxdb down")
 		atomic.StoreInt32(&r.buffering, 1)
 	}
 
@@ -90,7 +89,7 @@ func (r *retryBuffer) run() {
 		for {
 			resp, err := r.p.post(buf.Bytes(), batch.path, batch.query, batch.auth)
 			if err == nil && resp.StatusCode/100 != 5 {
-				log.Printf("Detect influxdb recovery")
+				// log.Printf("Detect influxdb recovery")
 				batch.resp = resp
 				atomic.StoreInt32(&r.buffering, 0)
 				batch.wg.Done()
@@ -115,6 +114,7 @@ type batch struct {
 	auth  string
 	bufs  [][]byte
 	size  int
+	count int
 	full  bool
 
 	wg   sync.WaitGroup
@@ -127,6 +127,7 @@ func newBatch(buf []byte, path string, query string, auth string) *batch {
 	b := new(batch)
 	b.bufs = [][]byte{buf}
 	b.size = len(buf)
+	b.count = 1
 	b.query = query
 	b.path = path
 	b.auth = auth
@@ -160,14 +161,12 @@ func (l *bufferList) pop() *batch {
 		l.cond.Wait()
 	}
 
-	if l.head == nil {
-		return nil
-	}
-
 	b := l.head
+
+	// log.Printf("pop %d->%d, %d->%d\n", l.size, l.size-b.size, l.count, l.count-b.count)
 	l.head = l.head.next
 	l.size -= b.size
-	l.count--
+	l.count -= b.count
 
 	return b
 }
@@ -180,6 +179,7 @@ func (l *bufferList) add(buf []byte, path, query string, auth string) (*batch, e
 		return nil, ErrBufferFull
 	}
 
+	// log.Printf("add %d->%d, %d->%d\n", l.size, l.size+len(buf), l.count, l.count+1)
 	l.size += len(buf)
 	l.count++
 	l.cond.Signal()
@@ -210,6 +210,7 @@ func (l *bufferList) add(buf []byte, path, query string, auth string) (*batch, e
 		// append to current batch
 		b := *cur
 		b.size += len(buf)
+		b.count++
 		b.bufs = append(b.bufs, buf)
 	}
 
