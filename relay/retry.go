@@ -190,7 +190,11 @@ func (l *bufferList) add(buf []byte, path, query string, auth string) (*batch, e
 	// credentials, or would be too large when adding the current set of points
 	// (auth must be checked to prevent potential problems in multi-user scenarios)
 	for cur = &l.head; *cur != nil; cur = &(*cur).next {
-		if (*cur).query != query || (*cur).auth != auth || (*cur).full {
+		if path != "/write" {
+			continue
+		}
+
+		if (*cur).path != path || (*cur).query != query || (*cur).auth != auth || (*cur).full {
 			continue
 		}
 
